@@ -1,0 +1,212 @@
+---
+title: "PROJECT"
+author: "Kirubhaharan"
+date: "2025-04-16"
+output: pdf_document
+---
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(tidyr)
+library(lubridate)
+
+```
+
+
+# 1. Load Data
+
+```{r}
+
+accident <- read_csv("accident.csv")
+vehicle <- read_csv("vehicle.csv")
+person <- read_csv("person.csv")
+race <- read_csv("race.csv")
+weather <- read_csv("weather.csv")
+damage <- read_csv("damage.csv")
+safetyeq <- read_csv("safetyeq.csv")
+vsoe <- read_csv("vsoe.csv")
+nmcrash <- read_csv("nmcrash.csv")
+
+```
+
+# 2. Preprocessing and Cleaning
+
+```{r}
+
+# Limit to 20000 rows to prevent memory crash
+person <- person %>%
+  distinct() %>%
+  mutate(AGE = as.numeric(AGE)) %>%
+  drop_na(AGE, INJ_SEVNAME)
+
+
+vehicle <- vehicle %>%
+  distinct() %>%
+  drop_na()
+
+accident <- accident %>%
+  distinct() %>%
+  drop_na()
+
+weather <- weather %>%
+  distinct() %>%
+  drop_na()
+
+race <- race %>%
+  distinct() %>%
+  drop_na()
+
+damage <- damage %>%
+  distinct() %>%
+  drop_na()
+
+safetyeq <- safetyeq %>%
+  distinct() %>%
+  drop_na()
+
+vsoe <- vsoe %>%
+  distinct() %>%
+  drop_na()
+
+nmcrash <- nmcrash %>%
+  distinct() %>%
+  drop_na()
+# Handle missing values (basic strategy: filter or replace with 'Unknown')
+# Limit to 20000 rows to prevent memory crash
+person <- person %>%
+  mutate(
+    AGE = as.numeric(AGE),
+    INJ_SEVNAME = replace_na(INJ_SEVNAME, "Unknown"),
+    SEXNAME = replace_na(SEXNAME, "Unknown"),
+    SEAT_POSNAME = replace_na(SEAT_POSNAME, "Unknown")
+  )
+
+vehicle <- vehicle %>%
+  mutate(
+    BODY_TYPNAME = replace_na(BODY_TYPNAME, "Unknown"),
+    GVWR_FROMNAME = replace_na(GVWR_FROMNAME, "Unknown"),
+    ROLLOVERNAME = replace_na(ROLLOVERNAME, "Unknown")
+  )
+
+weather <- weather %>%
+  mutate(WEATHERNAME = replace_na(WEATHERNAME, "Unknown"))
+
+# Convert time columns to numeric
+# Limit to 20000 rows to prevent memory crash
+person <- person %>%
+  mutate(HOUR = as.numeric(HOUR), AGE = as.numeric(AGE))
+
+```
+
+# 3. Merge Datasets
+
+```{r}
+
+merged_data <- suppressWarnings(person %>%
+  left_join(vehicle, by = c("ST_CASE", "VEH_NO")) %>%
+  left_join(accident, by = "ST_CASE") %>%
+  left_join(weather, by = "ST_CASE") %>%
+  left_join(race, by = c("ST_CASE", "VEH_NO", "PER_NO"))%>%
+  left_join(safetyeq, by = c("ST_CASE", "VEH_NO", "PER_NO")) %>%
+  left_join(damage, by = c("ST_CASE", "VEH_NO")) %>%
+  left_join(vsoe, by = c("ST_CASE", "VEH_NO")) %>%
+  left_join(nmcrash, by = c("ST_CASE", "VEH_NO", "PER_NO")) %>%
+  filter(!is.na(ST_CASE)))
+
+```
+
+# 4. Exploratory Data Analysis
+
+#  Person-Based Questions
+
+# Age group with the highest fatality rate
+
+```{r}
+
+library(ggplot2)
+
+filtered_data <- merged_data %>%
+  filter(AGE < 100)
+
+ggplot(filtered_data, aes(x = AGE, fill = INJ_SEVNAME)) +
+  geom_histogram(binwidth = 5, alpha = 0.7) +
+  labs(title = "Age vs Injury Severity", x = "Age", y = "Count")
+
+```
+
+```{r}
+filtered_data %>%
+  count(AGE, sort = TRUE) %>%
+  slice_max(n, n = 5)
+
+```
+
+```{r}
+
+library(ggplot2)
+fatal_age_data <- merged_data %>%
+  filter(AGE < 100, INJ_SEVNAME == "Fatal Injury (K)")
+
+ggplot(fatal_age_data, aes(x = AGE)) +
+  geom_histogram(binwidth = 5, fill = "firebrick", alpha = 0.8) +
+  labs(title = "Age Distribution of Fatal Injuries", x = "Age", y = "Fatal Crash Count")
+
+```
+
+
+```{r}
+fatal_age_data %>%
+  count(AGE, sort = TRUE) %>%
+  slice_max(n, n = 5)
+
+```
+The visualization and table highlights that the age 19 has the highest fatal injury rate and the highest number of fatal crash victims are in the late teen to mid-20s age range. This suggests that young adult drivers (especially those aged 18–24) are disproportionately represented in fatal crash statistics.
+
+# Seat position vs injury severity
+
+```{r}
+library(ggplot2)
+merged_data <- merged_data %>%
+  mutate(SEAT_POSNAME = case_when(
+    SEAT_POSNAME == "Other Passenger in enclosed passenger or cargo area" ~ "Other - Enclosed",
+    SEAT_POSNAME == "Other Passenger in passenger or cargo area, unknown whether or not enclosed" ~ "Other - Unknown",
+    SEAT_POSNAME == "Other Passenger in unenclosed passenger or cargo area" ~ "Other - Unenclosed",
+    TRUE ~ SEAT_POSNAME
+  ))
+
+ggplot(merged_data, aes(x = SEAT_POSNAME, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(title = "Seat Position vs Injury Severity", x = "Seat Position", y = "Proportion")
+
+```
+# Major seat position with injuries
+
+```{r}
+
+library(ggplot2)
+
+major_seats <- merged_data %>%
+  filter(
+    SEAT_POSNAME %in% c(
+      "Front Seat, Left Side",      # Driver
+      "Front Seat, Right Side",     # Front passenger
+      "Second Seat, Left Side",
+      "Second Seat, Right Side",
+      "Second Seat, Middle"),
+    !is.na(INJ_SEVNAME)
+  )
+ggplot(major_seats, aes(x = SEAT_POSNAME, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(
+    title = "Injury Severity by Major Seat Positions",
+    x = "Seat Position",
+    y = "Proportion")
+
+```
+
+From this visualization Front seat,Left side which is the driver seat is having more injury rate.

@@ -1,0 +1,388 @@
+---
+title: "Traffic Accident Data Analysis with Preprocessing"
+author: "Your Name"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(tidyr)
+
+```
+
+## 1. Load Data
+
+```{r load-data}
+# Read datasets
+accident <- read_csv("accident.csv")
+vehicle <- read_csv("vehicle.csv")
+person <- read_csv("person.csv")
+race <- read_csv("race.csv")
+weather <- read_csv("weather.csv")
+damage <- read_csv("damage.csv")
+safetyeq <- read_csv("safetyeq.csv")
+vsoe <- read_csv("vsoe.csv")
+nmcrash <- read_csv("nmcrash.csv")
+```
+
+## 2. Preprocessing and Cleaning
+
+```{r preprocessing}
+# Remove duplicates if any
+
+person <- person %>%
+  distinct() %>%
+  mutate(AGE = as.numeric(AGE)) %>%
+  drop_na()
+
+vehicle <- vehicle %>%
+  distinct() %>%
+  drop_na()
+
+accident <- accident %>%
+  distinct() %>%
+  drop_na()
+
+weather <- weather %>%
+  distinct() %>%
+  drop_na()
+
+race <- race %>%
+  distinct() %>%
+  drop_na()
+
+damage <- damage %>%
+  distinct() %>%
+  drop_na()
+
+safetyeq <- safetyeq %>%
+  distinct() %>%
+  drop_na()
+
+vsoe <- vsoe %>%
+  distinct() %>%
+  drop_na()
+
+nmcrash <- nmcrash %>%
+  distinct() %>%
+  drop_na()
+# Handle missing values (basic strategy: filter or replace with 'Unknown')
+person <- person %>%
+  mutate(
+    AGE = as.numeric(AGE),
+    INJ_SEVNAME = replace_na(INJ_SEVNAME, "Unknown"),
+    SEXNAME = replace_na(SEXNAME, "Unknown"),
+    SEAT_POSNAME = replace_na(SEAT_POSNAME, "Unknown")
+  )
+
+vehicle <- vehicle %>%
+  mutate(
+    BODY_TYPNAME = replace_na(BODY_TYPNAME, "Unknown"),
+    GVWR_FROMNAME = replace_na(GVWR_FROMNAME, "Unknown"),
+    ROLLOVERNAME = replace_na(ROLLOVERNAME, "Unknown")
+  )
+
+weather <- weather %>%
+  mutate(WEATHERNAME = replace_na(WEATHERNAME, "Unknown"))
+
+# Convert time columns to numeric
+person <- person %>%
+  mutate(HOUR = as.numeric(HOUR), AGE = as.numeric(AGE))
+```
+
+## 3. Merge Datasets
+
+```{r merging}
+# Merge data into one master dataset
+merged_data <- person %>%
+  left_join(vehicle, by = c("ST_CASE", "VEH_NO")) %>%
+  left_join(accident, by = "ST_CASE") %>%
+  left_join(weather, by = "ST_CASE") %>%
+  left_join(race, by = c("ST_CASE", "VEH_NO", "PER_NO")) %>%
+  left_join(safetyeq, by = c("ST_CASE", "VEH_NO", "PER_NO")) %>%
+  left_join(damage, by = c("ST_CASE", "VEH_NO")) %>%
+  left_join(vsoe, by = c("ST_CASE", "VEH_NO")) %>%
+  left_join(nmcrash, by = c("ST_CASE", "VEH_NO", "PER_NO")) %>%
+  filter(!is.na(ST_CASE))
+
+colnames(merged_data)
+```
+
+## 4. Exploratory Data Analysis
+
+### 👤 Person-Based Questions
+
+#### Age group with the highest fatality rate
+
+```{r}
+
+filtered_data <- merged_data %>%
+  filter(AGE < 100)
+
+ggplot(filtered_data, aes(x = AGE, fill = INJ_SEVNAME)) +
+  geom_histogram(binwidth = 5, alpha = 0.7) +
+  labs(title = "Age vs Injury Severity", x = "Age", y = "Count")
+```
+
+
+
+```{r}
+filtered_data %>%
+  count(AGE, sort = TRUE) %>%
+  slice_max(n, n = 4)
+```
+
+
+#### Seat position vs. injury severity
+
+```{r}
+
+ggplot(merged_data, aes(x = SEAT_POSNAME, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(title = "Seat Position vs Injury Severity", x = "Seat Position", y = "Proportion")
+
+```
+
+#### Gender involvement
+
+```{r}
+
+ggplot(merged_data, aes(x = SEXNAME)) +
+  geom_bar(fill = "skyblue") +
+  labs(title = "Gender Involvement in Crashes", x = "Gender", y = "Count")
+```
+
+
+### 🚗 Vehicle-Based Questions
+
+#### Vehicle body types involved
+
+```{r}
+ggplot(merged_data, aes(x = BODY_TYP.x)) +
+  geom_bar(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Crashes by Vehicle Body Type", x = "Vehicle Body Type", y = "Count")
+unique(merged_data$VE_FORMS.x)
+length(unique(merged_data$VPICBODYCLASSNAME.x))
+unique(merged_data$GVWR_FROMNAME.x)
+```
+
+```{r}
+merged_data %>%
+  count(BODY_TYPNAME.x, sort = TRUE) %>%
+  slice_max(n, n = 4)
+```
+
+#### Vehicle weight class vs. injury
+
+```{r weight-injury}
+
+new_df <- merged_data %>%
+  select(GVWR_FROMNAME.x, INJ_SEVNAME) %>%
+  filter(!is.na(GVWR_FROMNAME.x))
+
+
+ggplot(new_df, aes(x = GVWR_FROMNAME.x, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(title = "Vehicle Weight Class vs. Injury Severity", x = "Weight Class", y = "Proportion")
+
+```
+#### Rollover vs. fatalities
+
+```{r}
+
+ggplot(merged_data, aes(x = ROLLOVERNAME.x, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Rollover Involvement and Injury Severity",
+    x = "Rollover Status",
+    y = "Proportion"
+  ) +
+  coord_flip()
+
+```
+
+```{r}
+rollover_data %>%
+  count(ROLLOVERNAME.x, sort = TRUE) %>%
+  slice_max(n, n = 4)
+
+```
+### Substance Involvement Combo Analysis
+
+```{r}
+substance_data <- merged_data %>%
+  filter(!is.na(DRINKINGNAME), !is.na(DRUGSNAME), !is.na(INJ_SEVNAME)) %>%
+  mutate(
+    substance_combo = case_when(
+      DRINKINGNAME == "Yes" & DRUGSNAME == "Yes" ~ "Alcohol & Drugs",
+      DRINKINGNAME == "Yes" & DRUGSNAME != "Yes" ~ "Alcohol Only",
+      DRINKINGNAME != "Yes" & DRUGSNAME == "Yes" ~ "Drugs Only",
+      TRUE ~ "None"
+    )
+  )
+ggplot(substance_data, aes(x = substance_combo, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Injury Severity by Substance Involvement",
+    x = "Substance Use Category",
+    y = "Proportion"
+  ) +
+  coord_flip()
+
+
+```
+
+### Location Based
+
+### State-Based Analysis
+### Which states have the most crashes?
+```{r}
+state_crashes <- merged_data %>%
+  filter(!is.na(STATENAME)) %>%
+  count(STATENAME, sort = TRUE)
+
+ggplot(state_crashes, aes(x = reorder(STATENAME, n), y = n)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Total Crashes by State", x = "State", y = "Crash Count")
+
+
+```
+### Which states have the highest fatality rates?
+
+```{r}
+fatal_by_state <- merged_data %>%
+  filter(!is.na(STATENAME), !is.na(INJ_SEVNAME)) %>%
+  group_by(STATENAME) %>%
+  summarise(
+    total = n(),
+    fatal = sum(INJ_SEVNAME == "Fatal Injury (K)"),
+    fatal_rate = fatal / total * 100
+  ) %>%
+  arrange(desc(fatal_rate))
+
+ggplot(fatal_by_state, aes(x = reorder(STATENAME, fatal_rate), y = fatal_rate)) +
+  geom_col(fill = "firebrick") +
+  coord_flip() +
+  labs(title = "Fatality Rate by State", x = "State", y = "Fatality Rate (%)")
+```
+
+
+
+
+```{r}
+fatal_by_state %>%
+  count(STATENAME, sort = TRUE) %>%
+  slice_max(fatal_rate, n = 4)
+
+```
+
+### Are rural or urban crashes more severe?
+```{r}
+ggplot(merged_data, aes(x = RUR_URBNAME.x, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Injury Severity in Rural vs Urban Crashes",
+    x = "Location Type",
+    y = "Proportion"
+  ) +
+  coord_flip()
+```
+
+### 🌦 Weather-Based Questions
+
+#### Weather with most accidents
+
+```{r}
+
+ggplot(merged_data, aes(x = WEATHERNAME.x)) +
+  geom_bar(fill = "orange") +
+  coord_flip() +
+  labs(title = "Accidents by Weather Condition", x = "Weather", y = "Count")
+
+```
+
+#### Snow/Rain and injury severity
+
+```{r}
+
+ggplot(weather_data, aes(x = WEATHERNAME.x, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(title = "Weather vs Injury Severity", x = "Weather", y = "Proportion")
+
+### Time based
+```
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+
+merged_data <- merged_data %>%
+  filter(!is.na(HOUR), HOUR < 24) %>%
+  mutate(
+    TIME_OF_DAY = case_when(
+      HOUR >= 0  & HOUR <= 5  ~ "Night",
+      HOUR >= 6  & HOUR <= 11 ~ "Morning",
+      HOUR >= 12 & HOUR <= 16 ~ "Afternoon",
+      HOUR >= 17 & HOUR <= 20 ~ "Evening",
+      HOUR >= 21 & HOUR <= 23 ~ "Late Night"
+    )
+  )
+
+heatmap_data <- merged_data %>%
+  filter(!is.na(INJ_SEVNAME)) %>%
+  group_by(TIME_OF_DAY, INJ_SEVNAME) %>%
+  summarise(count = n(), .groups = "drop")
+
+ggplot(heatmap_data, aes(x = TIME_OF_DAY, y = INJ_SEVNAME, fill = count)) +
+  geom_tile(color = "white", linewidth = 0.3) +
+  scale_fill_gradient(low = "lightyellow", high = "darkred") +
+  labs(
+    title = "Heatmap of Injury Severity by Time of Day",
+    x = "Time of Day",
+    y = "Injury Severity",
+    fill = "Crash Count"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 20, hjust = 1),
+    panel.grid = element_blank()
+  )
+
+
+```
+
+
+### 🧯 Safety Equipment Questions
+
+#### Seatbelt or helmet use vs. fatalities
+
+```{r}
+
+ggplot(safety_data, aes(x = REST_USENAME, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(title = "Seatbelt Use vs. Injury Severity", x = "Seatbelt Usage", y = "Proportion")
+
+```
+
+#### Airbag deployment and survival
+
+```{r}
+ggplot(merged_data, aes(x = AIR_BAGNAME, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(title = "Airbag Deployment vs. Injury Severity", x = "Airbag Status", y = "Proportion")
+
+```
+## ✅ Final Summary
+
+This report provides a complete picture of how personal, vehicle, and environmental factors contribute to crash outcomes. The preprocessing ensures cleaner data and more accurate visual insights.

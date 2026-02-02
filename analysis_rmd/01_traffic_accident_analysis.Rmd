@@ -1,0 +1,146 @@
+
+---
+title: "Traffic Accident Data Analysis"
+author: "Your Name"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(tidyr)
+```
+
+## Load Data
+
+```{r load-data}
+# Load all datasets
+accident <- read_csv("accident.csv")
+vehicle <- read_csv("vehicle.csv")
+person <- read_csv("person.csv")
+race <- read_csv("race.csv")
+weather <- read_csv("weather.csv")
+damage <- read_csv("damage.csv")
+safetyeq <- read_csv("safetyeq.csv")
+vsoe <- read_csv("vsoe.csv")
+nmcrash <- read_csv("nmcrash.csv")
+
+# Merge datasets
+merged_data <- person %>%
+  left_join(vehicle, by = c("ST_CASE", "VEH_NO")) %>%
+  left_join(accident, by = "ST_CASE") %>%
+  left_join(weather, by = "ST_CASE") %>%
+  left_join(race, by = c("ST_CASE", "VEH_NO", "PER_NO")) %>%
+  left_join(safetyeq, by = c("ST_CASE", "VEH_NO", "PER_NO")) %>%
+  left_join(damage, by = c("ST_CASE", "VEH_NO")) %>%
+  left_join(vsoe, by = c("ST_CASE", "VEH_NO")) %>%
+  left_join(nmcrash, by = c("ST_CASE", "VEH_NO", "PER_NO"))
+```
+
+## 👤 Person-Based Analysis
+
+### 1. What age group has the highest fatality rate?
+
+```{r age-fatality}
+ggplot(merged_data, aes(x = as.numeric(AGE), fill = INJ_SEVNAME)) +
+  geom_histogram(binwidth = 5, position = "identity", alpha = 0.6) +
+  labs(title = "Age vs. Injury Severity", x = "Age", y = "Number of People")
+```
+*This plot shows how injury severity varies by age. We can visually identify if fatal injuries are more frequent in a specific age group.*
+
+### 2. Does seat position affect injury severity?
+
+```{r seat-position}
+ggplot(merged_data, aes(x = SEAT_POSNAME, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(title = "Injury Severity by Seat Position", x = "Seat Position", y = "Proportion")
+```
+*This bar chart compares seat position with injury severity. Rear seats, front seats, and driver seats can be compared for safety insights.*
+
+### 3. Are males or females more frequently involved?
+
+```{r gender-involvement}
+ggplot(merged_data, aes(x = SEXNAME)) +
+  geom_bar(fill = "skyblue") +
+  labs(title = "Number of People Involved by Gender", x = "Gender", y = "Count")
+```
+*This chart simply shows the count of males and females involved in crashes.*
+
+## 🚗 Vehicle-Based Analysis
+
+### 4. Which body types are involved in the most crashes?
+
+```{r body-type}
+ggplot(merged_data, aes(x = BODY_TYPNAME)) +
+  geom_bar(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Crashes by Vehicle Body Type", x = "Body Type", y = "Count")
+```
+*Shows which vehicle body types are most commonly involved in accidents.*
+
+### 5. Is there a link between vehicle weight and injuries?
+
+```{r weight-injury}
+ggplot(merged_data, aes(x = GVWR_FROMNAME, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(title = "Vehicle Weight Class vs. Injury Severity", x = "Weight Class", y = "Proportion")
+```
+*This plot helps examine whether heavier or lighter vehicles result in more severe injuries.*
+
+### 6. Are rollovers more likely to result in fatalities?
+
+```{r rollover-fatality}
+ggplot(merged_data, aes(x = ROLLOVERNAME, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  labs(title = "Rollover Involvement and Injury Severity", x = "Rollover", y = "Proportion")
+```
+*Highlights whether rollover accidents lead to more fatal outcomes.*
+
+## 🌦️ Weather-Based Analysis
+
+### 7. In which weather condition do most accidents happen?
+
+```{r weather-accidents}
+ggplot(merged_data, aes(x = WEATHERNAME)) +
+  geom_bar(fill = "tomato") +
+  coord_flip() +
+  labs(title = "Accidents by Weather Condition", x = "Weather", y = "Count")
+```
+*Shows which weather conditions are associated with the most crashes.*
+
+### 8. Are snowy or rainy days more dangerous?
+
+```{r weather-severity}
+ggplot(merged_data, aes(x = WEATHERNAME, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(title = "Weather Condition vs. Injury Severity", x = "Weather", y = "Proportion")
+```
+*Compares different weather types and their impact on injury severity.*
+
+## 🧯 Safety Equipment Analysis
+
+### 9. Did seatbelt or helmet usage reduce fatalities?
+
+```{r restraint-fatality}
+ggplot(merged_data, aes(x = REST_USENAME, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(title = "Restraint Use vs. Injury Severity", x = "Restraint Use", y = "Proportion")
+```
+*Analyzes how using seatbelts correlates with reduced fatalities.*
+
+### 10. Was airbag deployment associated with survival?
+
+```{r airbag-survival}
+ggplot(merged_data, aes(x = AIR_BAGNAME, fill = INJ_SEVNAME)) +
+  geom_bar(position = "fill") +
+  coord_flip() +
+  labs(title = "Airbag Deployment and Injury Severity", x = "Airbag Deployment", y = "Proportion")
+```
+*Visualizes the relationship between airbag deployment and injury outcome.*
+

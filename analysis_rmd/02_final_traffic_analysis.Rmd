@@ -1,0 +1,128 @@
+
+---
+title: "Traffic Accident Data Analysis with Preprocessing"
+author: "Your Name"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(tidyr)
+library(lubridate)
+```
+
+## 1. Load Data
+
+```{r}
+# Read datasets
+accident <- read_csv("accident.csv")
+vehicle <- read_csv("vehicle.csv")
+person <- read_csv("person.csv")
+race <- read_csv("race.csv")
+weather <- read_csv("weather.csv")
+damage <- read_csv("damage.csv")
+safetyeq <- read_csv("safetyeq.csv")
+vsoe <- read_csv("vsoe.csv")
+nmcrash <- read_csv("nmcrash.csv")
+
+```
+
+## 2. Preprocessing and Cleaning
+
+```{r preprocessing}
+# Remove duplicates and NA if any
+
+person <- person %>%
+  distinct() %>%
+  mutate(AGE = as.numeric(AGE)) %>%
+  drop_na()
+
+vehicle <- vehicle %>%
+  distinct() %>%
+  drop_na()
+
+accident <- accident %>%
+  distinct() %>%
+  drop_na()
+
+weather <- weather %>%
+  distinct() %>%
+  drop_na()
+
+damage <- damage %>%
+  distinct() %>%
+  drop_na()
+
+safetyeq <- safetyeq %>%
+  distinct() %>%
+  drop_na()
+
+vsoe <- vsoe %>%
+  distinct() %>%
+  drop_na()
+
+nmcrash <- nmcrash %>%
+  distinct() %>%
+  drop_na()
+# Handle missing values (basic strategy: filter or replace with 'Unknown')
+person <- person %>%
+  mutate(
+    AGE = as.numeric(AGE),
+    INJ_SEVNAME = replace_na(INJ_SEVNAME, "Unknown"),
+    SEXNAME = replace_na(SEXNAME, "Unknown"),
+    SEAT_POSNAME = replace_na(SEAT_POSNAME, "Unknown")
+  )
+
+vehicle <- vehicle %>%
+  mutate(
+    BODY_TYPNAME = replace_na(BODY_TYPNAME, "Unknown"),
+    GVWR_FROMNAME = replace_na(GVWR_FROMNAME, "Unknown"),
+    ROLLOVERNAME = replace_na(ROLLOVERNAME, "Unknown")
+  )
+
+weather <- weather %>%
+  mutate(WEATHERNAME = replace_na(WEATHERNAME, "Unknown"))
+
+# Convert time columns to numeric
+person <- person %>%
+  mutate(HOUR = as.numeric(HOUR), AGE = as.numeric(AGE))
+```
+
+## 3. Merge Datasets
+
+```{r merging}
+# Merge data into one master dataset
+merged_data <- person %>%
+  left_join(vehicle, by = c("ST_CASE", "VEH_NO")) %>%
+  left_join(accident, by = "ST_CASE") %>%
+  left_join(weather, by = "ST_CASE") %>%
+  left_join(race, by = c("ST_CASE", "VEH_NO", "PER_NO"))%>%
+  left_join(safetyeq, by = c("ST_CASE", "VEH_NO", "PER_NO")) %>%
+  left_join(damage, by = c("ST_CASE", "VEH_NO")) %>%
+  left_join(vsoe, by = c("ST_CASE", "VEH_NO")) %>%
+  left_join(nmcrash, by = c("ST_CASE", "VEH_NO", "PER_NO")) %>%
+  filter(!is.na(ST_CASE))
+
+```
+
+## 4. Exploratory Data Analysis
+
+###  Person-Based Questions
+
+#### Age group with the highest fatality rate
+
+```{r}
+
+filtered_data <- merged_data %>%
+  filter(AGE < 100)
+
+ggplot(filtered_data, aes(x = AGE, fill = INJ_SEVNAME)) +
+  geom_histogram(binwidth = 5, alpha = 0.7) +
+  labs(title = "Age vs Injury Severity", x = "Age", y = "Count")
+
+```
+
+
